@@ -1,0 +1,7 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>doda2025.group1</groupId>
+    <artifactId>lib-version</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+</project>
