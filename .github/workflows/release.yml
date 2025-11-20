@@ -1,9 +1,6 @@
 name: Release lib-version
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
@@ -22,7 +19,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '25'
           distribution: 'temurin'
 
       - name: Install xmllstarlet
@@ -68,7 +65,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '25'
           distribution: 'temurin'
 
       - name: Install xmllstarlet
