@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - main
+      - '**'
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  build-and-release:
+  stable-release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,45 +24,74 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
-      - name: Install xmllstarlet
-        run: |
-          sudo apt-get install -y xmlstarlet
+      - name: Install xmlstarlet
+        run: sudo apt-get update && sudo apt-get install -y xmlstarlet
 
-      #Extract version from pom.xml
-      - name: Extract version from pom.xml
+      - name: Read current version
+        id: read_version
         run: |
           version=$(xmlstarlet sel -t -v "/*[local-name()='project']/*[local-name()='version']" pom.xml)
-          version=${version%-SNAPSHOT}
-          echo "VERSION=$version" >> $GITHUB_ENV
+          echo "RAW_VERSION=$version" >> $GITHUB_ENV
+          stable=${version%-SNAPSHOT}
+          echo "STABLE_VERSION=$stable" >> $GITHUB_ENV
 
-      - name: Create GitHub Tag
+      - name: Prepare stable release commit and tag
+        env:
+          STABLE_VERSION: ${{ env.STABLE_VERSION }}
         run: |
-          git fetch --tags
-
-          if git rev-parse "v${{ env.VERSION }}" >/dev/null 2>&1; then
-            echo "Tag v${{ env.VERSION }} already exists. Skipping..."
-            exit 0
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # set project to stable version and commit that change
+          mvn versions:set -DnewVersion=${STABLE_VERSION} -DgenerateBackupPoms=false
+          git add -A
+          git commit -m "chore(release): release v${STABLE_VERSION}" || echo "no changes to commit"
+          
+          # create tag only if not existing
+          if git rev-parse "v${STABLE_VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${STABLE_VERSION} already exists."
+          else
+            git tag "v${STABLE_VERSION}"
           fi
           
-          git tag "v${{ env.VERSION }}"
-          git push origin "v${{ env.VERSION }}"
+          git push origin HEAD:main
+          git push origin --tags
 
-
-      - name: Build package
-        run: mvn -B -q clean package --file pom.xml
-
-      - name: Publish to GitHub Packages (Maven)
+      - name: Build and deploy stable artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mvn -B -q deploy -s "$GITHUB_WORKSPACE/settings.xml"
+        run: |
+          mvn -B -q clean package --file pom.xml
+          mvn -B -q deploy -s "$GITHUB_WORKSPACE/settings.xml"
 
-  bump-version:
+      - name: Bump to next snapshot and push
+        env:
+          STABLE_VERSION: ${{ env.STABLE_VERSION }}
+        run: |
+          # compute next patch
+          curr=${STABLE_VERSION}
+          major=$(echo "$curr" | cut -d. -f1)
+          minor=$(echo "$curr" | cut -d. -f2)
+          patch=$(echo "$curr" | cut -d. -f3)
+          next_patch=$((patch+1))
+          next="${major}.${minor}.${next_patch}-SNAPSHOT"
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          mvn -B -q versions:set -DnewVersion=${next} -DgenerateBackupPoms=false
+          git add -A
+          git commit -m "chore: bump version to ${next} [skip ci]" || echo "no changes to commit"
+          git push origin HEAD:main
+
+  branch-pre-release:
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: build-and-release
-
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -68,27 +99,48 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
-      - name: Install xmllstarlet
-        run: |
-          sudo apt-get install -y xmlstarlet
+      - name: Install xmlstarlet
+        run: sudo apt-get update && sudo apt-get install -y xmlstarlet
 
-      #next snapshot version
-      - name: calculate next version
+      - name: Compute pre-release version
+        id: pre_version
         run: |
           version=$(xmlstarlet sel -t -v "/*[local-name()='project']/*[local-name()='version']" pom.xml)
-          curr_version=${version%-SNAPSHOT}
-          major=$(echo "$curr_version" | cut -d . -f 1)
-          minor=$(echo "$curr_version" | cut -d . -f 2)
-          patch=$(echo "$curr_version" | cut -d . -f 3)
-          next_patch=$((patch+1)) 
-          new_version="${major}.${minor}.${next_patch}-SNAPSHOT"
-          echo "NEW_VERSION=$new_version" >> $GITHUB_ENV
+          base=${version%-SNAPSHOT}
+          # branch name from ref
+          branch=${GITHUB_REF#refs/heads/}
+          # sanitize branch name: replace slashes and spaces with '-'
+          safe_branch=$(echo "$branch" | sed -E 's#[/[:space:]]#-#g' | sed -E 's/[^A-Za-z0-9._-]/-/g')
+          timestamp=$(date +'%y%m%d-%H%M%S')
+          pre="${base}-${safe_branch}-${timestamp}"
+          echo "PRE_VERSION=$pre" >> $GITHUB_ENV
+          echo "BRANCH_NAME=$branch" >> $GITHUB_ENV
 
-      #Commit new version
-      - name: commit new version
-        run:  |
-          mvn versions:set -DnewVersion=${{ env.NEW_VERSION }} -DgenerateBackupPoms=false
-          git config user.name "GitHub Actions" 
-          git config user.email "actions@github.com" 
-          git commit -am "chore: bump version to ${{ env.NEW_VERSION }} [skip ci]" 
-          git push origin main
+      - name: Commit, tag and push pre-release version
+        env:
+          PRE_VERSION: ${{ env.PRE_VERSION }}
+          BRANCH_NAME: ${{ env.BRANCH_NAME }}
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          mvn versions:set -DnewVersion=${PRE_VERSION} -DgenerateBackupPoms=false
+          git add -A
+          git commit -m "chore(pre-release): ${PRE_VERSION} from ${BRANCH_NAME} [skip ci]" || echo "no changes to commit"
+          
+          if git rev-parse "v${PRE_VERSION}" >/dev/null 2>&1; then
+            echo "Tag v${PRE_VERSION} already exists."
+          else
+            git tag "v${PRE_VERSION}"
+          fi
+          
+          # push commit and tag back to the branch
+          git push origin "HEAD:${BRANCH_NAME}"
+          git push origin --tags
+
+      - name: Build and deploy pre-release artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mvn -B -q clean package --file pom.xml
+          mvn -B -q deploy -DskipTests -s "$GITHUB_WORKSPACE/settings.xml"
