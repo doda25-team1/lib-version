@@ -128,7 +128,7 @@ jobs:
           
           git fetch --tags
           if git rev-parse "v${PRE_VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${PRE_VERSION} already exists."
+            echo "Tag v${PRE_VERSION} already exists. "
           else
             git tag "v${PRE_VERSION}"
           fi
