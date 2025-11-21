@@ -3,7 +3,7 @@
 
     <groupId>doda2025.group1</groupId>
     <artifactId>lib-version</artifactId>
-    <version>1.0.1-feat-f11-251121-174439</version>
+    <version>1.0.1-feat-f11-251121-174439-fix-releaseyml-251121-184846</version>
     <packaging>jar</packaging>
 
     <name>lib-version</name>
