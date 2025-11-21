@@ -3,7 +3,7 @@
 
     <groupId>doda2025.group1</groupId>
     <artifactId>lib-version</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.0.1-feat-remove_tagpush-251121-185442</version>
     <packaging>jar</packaging>
 
     <name>lib-version</name>
