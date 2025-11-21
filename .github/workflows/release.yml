@@ -53,6 +53,7 @@ jobs:
             echo "Tag v${STABLE_VERSION} already exists."
           else
             git tag "v${STABLE_VERSION}"
+            git push origin "v${STABLE_VERSION}"
           fi
           
           git push origin HEAD:main
@@ -131,6 +132,7 @@ jobs:
             echo "Tag v${PRE_VERSION} already exists. "
           else
             git tag "v${PRE_VERSION}"
+            git push origin "v${PRE_VERSION}"
           fi
           
           # push commit and tag back to the branch
