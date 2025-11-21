@@ -47,6 +47,7 @@ jobs:
           git add -A
           git commit -m "chore(release): release v${STABLE_VERSION}" || echo "no changes to commit"
           
+          git fetch --tags
           # create tag only if not existing
           if git rev-parse "v${STABLE_VERSION}" >/dev/null 2>&1; then
             echo "Tag v${STABLE_VERSION} already exists."
@@ -55,7 +56,6 @@ jobs:
           fi
           
           git push origin HEAD:main
-          git push origin --tags
 
       - name: Build and deploy stable artifacts
         env:
@@ -128,6 +128,7 @@ jobs:
           git add -A
           git commit -m "chore(pre-release): ${PRE_VERSION} from ${BRANCH_NAME} [skip ci]" || echo "no changes to commit"
           
+          git fetch --tags
           if git rev-parse "v${PRE_VERSION}" >/dev/null 2>&1; then
             echo "Tag v${PRE_VERSION} already exists."
           else
@@ -136,7 +137,6 @@ jobs:
           
           # push commit and tag back to the branch
           git push origin "HEAD:${BRANCH_NAME}"
-          git push origin --tags
 
       - name: Build and deploy pre-release artifacts
         env:
